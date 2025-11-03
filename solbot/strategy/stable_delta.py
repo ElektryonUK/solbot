@@ -1,4 +1,4 @@
-from __future__ annotations
+from __future__ import annotations
 from typing import List
 from solbot.core.env import Settings
 from solbot.discovery import DiscoveryService

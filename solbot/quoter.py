@@ -1,4 +1,4 @@
-from __future__ annotations
+from __future__ import annotations
 import httpx
 from typing import Sequence
 from solbot.core.env import Settings
