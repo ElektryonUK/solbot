@@ -1,4 +1,4 @@
-from __future__ annotations
+from __future__ import annotations
 from typing import List
 from solbot.core.env import Settings
 from solbot.discovery import DiscoveryService
@@ -17,12 +17,13 @@ class TwoLegSpread:
     async def propose_plans(self) -> List[Plan]:
         plans: List[Plan] = []
         notional_usd = min(self.s.MAX_NOTIONAL_USD, 50)
-        amount = int(notional_usd * 1_000_000)
+        amount = int(notional_usd * 1_000_000)  # assume USDC 6dp
+        # scan SOL<>USD pairs as a simple baseline
         for usd_mint in USD_MINTS.values():
             routes = await self.q.top_routes(usd_mint, SOL_MINT, amount, n=1)
             if not routes:
                 continue
             r = routes[0]
-            est = float(r.get("expected_pnl_usd", -1))
-            plans.append(Plan(route=[usd_mint, SOL_MINT], notional_usd=notional_usd, expected_pnl_usd=est, max_slippage_bps=self.s.SLIPPAGE_BPS_PER_LEG*2))
+            est_pnl = float(r.get("expected_pnl_usd", -0.01))
+            plans.append(Plan(route=[usd_mint, SOL_MINT], notional_usd=notional_usd, expected_pnl_usd=est_pnl, max_slippage_bps=self.s.SLIPPAGE_BPS_PER_LEG*2))
         return plans
