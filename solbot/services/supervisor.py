@@ -27,7 +27,7 @@ async def run_supervisor(settings: Settings) -> None:
     ]
 
     await discovery.refresh()
-    logger.info("Discovery primed", extra={"pairs": discovery.watch_count})
+    logger.info("discovery", extra={"pairs": discovery.watch_count})
 
     failures = 0
     while True:
@@ -48,12 +48,12 @@ async def run_supervisor(settings: Settings) -> None:
                     continue
                 plans.extend(res)
 
-            # Log plan summaries for visibility
+            # Summarize plans without long URLs
             if plans:
                 summary = [
                     {
-                        "route": p.route,
-                        "notional_usd": round(p.notional_usd, 4),
+                        "pair": f"{p.route[0][-4:]}->{p.route[-1][-4:]}",
+                        "notional": round(p.notional_usd, 4),
                         "exp_pnl": round(p.expected_pnl_usd, 6),
                         "slip_bps": p.max_slippage_bps,
                     }
@@ -63,7 +63,6 @@ async def run_supervisor(settings: Settings) -> None:
 
             plans.sort(key=lambda p: p.expected_pnl_usd, reverse=True)
 
-            executed = False
             for plan in plans:
                 if plan.expected_pnl_usd < settings.MIN_PROFIT_USD:
                     logger.info(
@@ -72,16 +71,22 @@ async def run_supervisor(settings: Settings) -> None:
                             "reason": "below_min_profit",
                             "min": settings.MIN_PROFIT_USD,
                             "exp_pnl": round(plan.expected_pnl_usd, 6),
-                            "route": plan.route,
+                            "pair": f"{plan.route[0][-4:]}->{plan.route[-1][-4:]}",
                         },
                     )
                     continue
-                logger.info("attempting plan", extra={"route": plan.route, "exp_pnl": round(plan.expected_pnl_usd, 6)})
+                logger.info(
+                    "attempting",
+                    extra={
+                        "pair": f"{plan.route[0][-4:]}->{plan.route[-1][-4:]}",
+                        "exp_pnl": round(plan.expected_pnl_usd, 6),
+                        "notional": round(plan.notional_usd, 4),
+                    },
+                )
                 ok = await executor.try_execute(plan)
-                logger.info("execution result", extra={"ok": ok})
+                logger.info("result", extra={"ok": ok})
                 if ok:
                     guard.add_pnl(plan.expected_pnl_usd)
-                    executed = True
                     break
 
             dt = (time.perf_counter() - t0) * 1000

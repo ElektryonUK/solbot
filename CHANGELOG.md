@@ -1,1 +1,2 @@
-- Add plan summary and filtering/execution logs to supervisor for visibility into profitability decisions
+- Remove long URL logs and replace with summarized pair/amount/status lines
+- Summarize plan logs (pair tail, notional, expected PnL) to keep console clean

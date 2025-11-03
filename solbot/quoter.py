@@ -8,13 +8,10 @@ TAKER_FEE_BPS = 30
 class JupiterQuoter:
     def __init__(self, settings):
         self.settings = settings
-        # Use new Jupiter quote endpoint per 2025 docs
-        # Prefer Pro; fall back to Lite if no API access
         self.base = os.getenv("JUP_BASE", "https://lite-api.jup.ag/swap/v1")
 
     async def top_routes(self, base_mint: str, quote_mint: str, amount: int, n: int = 3):
         if os.getenv("OFFLINE_QUOTES", "false").lower() == "true":
-            # simple offline mock: 1% spread estimate around parity
             in_amt = amount / 1_000_000
             out_amt = in_amt * 0.995
             expected_pnl_usd = (out_amt - in_amt) - in_amt * (TAKER_FEE_BPS/10_000)
@@ -33,7 +30,8 @@ class JupiterQuoter:
             r = await client.get(f"{self.base}/quote", params=params)
             r.raise_for_status()
             data = r.json()
-        # Normalize data shape for legacy usage
+        # Do not log the URL (avoid huge links); summarize only
+        logger.info("jup.quote", extra={"pair": f"{base_mint[-4:]}->{quote_mint[-4:]}", "amount": amount, "status": "ok"})
         route = (data or {}).get("data") or data
         if isinstance(route, dict):
             route = [route]
