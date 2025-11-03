@@ -13,5 +13,5 @@ class TwoLegSpread:
 
     async def propose_plans(self) -> List[Plan]:
         plans: List[Plan] = []
-        # Minimal placeholder logic: produce no plans yet
+        # Simple seed: no-op for now. Next push will use quote API to compute spreads.
         return plans
