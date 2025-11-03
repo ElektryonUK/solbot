@@ -1,4 +1,4 @@
-solana==0.34.5
+solana==0.36.7
 anchorpy==0.21.0
 base58==2.1.1
 construct==2.10.70
