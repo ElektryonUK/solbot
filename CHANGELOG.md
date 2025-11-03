@@ -1,2 +1,2 @@
-- Add OFFLINE_DISCOVERY env flag to bypass HTTP discovery and use a static majors watchlist
-- Helpful when DNS/egress is restricted; enables dry-run/testing without external lookups
+- Switch to new Jupiter quote endpoint (JUP_BASE; default to lite-api)
+- Add OFFLINE_QUOTES to enable fully offline dry-run when network is blocked
