@@ -34,15 +34,12 @@ class JupiterSwap:
         })
 
         try:
-            # Build swap request payload
             payload = {
                 "quoteResponse": quote_response,
                 "userPublicKey": user_pubkey,
-                "useSharedAccounts": True,
                 "wrapAndUnwrapSol": True,
+                "useSharedAccounts": True,
             }
-            
-            # Add optional parameters
             if prioritization_fee_lamports:
                 payload["prioritizationFeeLamports"] = prioritization_fee_lamports
             if compute_unit_price_micro_lamports:
@@ -50,14 +47,18 @@ class JupiterSwap:
                 payload["dynamicComputeUnitLimit"] = True
 
             async with httpx.AsyncClient(timeout=20) as client:
-                # Get serialized transaction
                 r = await client.post(f"{self.base}/swap", json=payload)
-                logger.info("swap.response", extra={"status": r.status_code})
+                body_txt = None
+                try:
+                    body_txt = r.text[:800]
+                except Exception:
+                    body_txt = None
+                logger.info("swap.response", extra={"status": r.status_code, "body": body_txt})
                 r.raise_for_status()
                 swap_data = r.json()
                 
                 if "swapTransaction" not in swap_data:
-                    raise ValueError(f"invalid swap response: {list(swap_data.keys())}")
+                    raise ValueError(f"invalid swap response keys: {list(swap_data.keys())}")
 
                 tx_b64 = swap_data["swapTransaction"]
 
@@ -72,7 +73,7 @@ class JupiterSwap:
                     kp = Keypair.from_base58_string(kp_env)
 
                 tx = Transaction.from_bytes(base64.b64decode(tx_b64))
-                signed_tx = tx.sign([kp])  # returns a new signed transaction
+                signed_tx = tx.sign([kp])
                 signed_b64 = base64.b64encode(bytes(signed_tx)).decode()
                 logger.info("tx.signed", extra={"len": len(signed_b64)})
 
