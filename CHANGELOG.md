@@ -1,4 +1,2 @@
-- Resolve FastAPI/Starlette/SSE constraint conflict:
-  - FastAPI 0.115.x requires Starlette >=0.37.2,<0.39.0
-  - Pin Starlette in that range and set sse-starlette==1.8.2 which is compatible
-- Keep previous Solana stack pins intact
+- Add OFFLINE_DISCOVERY env flag to bypass HTTP discovery and use a static majors watchlist
+- Helpful when DNS/egress is restricted; enables dry-run/testing without external lookups
