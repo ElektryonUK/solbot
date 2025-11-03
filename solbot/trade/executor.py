@@ -7,7 +7,7 @@ from solbot.execution.jupiter_swap import JupiterSwap
 if TYPE_CHECKING:
     from solbot.core.rpc import RpcPool
 
-# Wide-net aliases to catch most bot schemas
+# Wide-net aliases for route items
 ALIASES_IN = [
     "input_mint", "base", "base_mint", "from_mint", "mint_in", "in_mint",
     "src_mint", "token_in", "in_token", "in_symbol", "base_token_mint", "base_token"
@@ -54,8 +54,7 @@ class Executor:
             return json.dumps({"repr": repr(d)})
 
     async def try_execute(self, plan) -> bool:
-        # Build a dict representation for inspection
-        plan_repr = None
+        # Plan inspect
         try:
             if hasattr(plan, 'model_dump'):
                 plan_repr = plan.model_dump()
@@ -70,21 +69,42 @@ class Executor:
 
         logger.info("plan.inspect: " + self._inspect_preview(plan_repr))
 
-        # Discover legs or single-leg candidate
         legs = getattr(plan, "legs", None)
-        if legs is None and isinstance(plan_repr, dict):
+
+        # New: if no legs, try to derive from first route item
+        route = plan_repr.get("route") if isinstance(plan_repr, dict) else None
+        if legs is None and isinstance(route, list) and route:
+            # Inspect route[0] structure
+            r0 = route[0] if isinstance(route[0], dict) else (
+                getattr(route[0], 'model_dump', lambda: None)() or getattr(route[0], '__dict__', {})
+            )
+            logger.info("route.inspect: " + self._inspect_preview(r0))
+
+            # Wide-net mapping from route[0]
+            input_mint = self._get_first(r0, ALIASES_IN)
+            output_mint = self._get_first(r0, ALIASES_OUT)
+            input_amount = self._get_first(r0, ALIASES_AMT)
+
+            # As a fallback, if amount is missing but there is a notional in plan, try qty_in/size on route
+            if input_amount is None and isinstance(route[0], dict):
+                for k in ("qty_in", "size", "amount_in", "in_amount"):
+                    if k in r0 and isinstance(r0[k], (int, float, str)):
+                        input_amount = r0[k]
+                        break
+
             candidate = {
-                "input_mint": self._get_first(plan_repr, ALIASES_IN),
-                "output_mint": self._get_first(plan_repr, ALIASES_OUT),
-                "input_amount": self._get_first(plan_repr, ALIASES_AMT),
+                "input_mint": input_mint,
+                "output_mint": output_mint,
+                "input_amount": input_amount,
             }
             logger.info("candidate.inspect: " + json.dumps(candidate))
+
             if all(candidate.values()):
                 legs = [candidate]
 
         if legs is None:
             logger.error("fail.inspect: " + json.dumps({
-                "reason": "No legs and no recognizable single-leg fields",
+                "reason": "No legs and no recognizable fields (plan-level and route[0] mapping failed)",
                 "plan_keys": list(plan_repr.keys()) if isinstance(plan_repr, dict) else type(plan_repr).__name__
             }))
             return False
