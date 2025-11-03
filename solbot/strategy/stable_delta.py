@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ annotations
 from typing import List
 from solbot.core.env import Settings
 from solbot.discovery import DiscoveryService
@@ -12,5 +12,4 @@ class StableDelta:
         self.q = quoter
 
     async def propose_plans(self) -> List[Plan]:
-        # placeholder: no stable pool modeling yet
         return []

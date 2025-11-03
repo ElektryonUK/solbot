@@ -1,3 +1,3 @@
-- Add TwoLegSpread baseline using Jupiter quotes for USDx<>SOL seed universe
-- Add DailyLossGuard and wire to supervisor; accumulates realized PnL placeholder
-- Keep StableDelta as placeholder for now
+- Add expected PnL annotation in quoter for dry-run gating
+- Implement dry_run.sh script and DRY_RUN guide
+- Update TwoLegSpread to use annotated expected_pnl_usd
