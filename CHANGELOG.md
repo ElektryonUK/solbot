@@ -1,5 +1,4 @@
-- Align deps for Python 3.12 on Ubuntu 24.04:
-  - solana==0.36.0 (requires solders >=0.23.0,<0.24.0)
-  - anchorpy==0.20.2 (relaxes solders constraint per upstream changelog)
-  - solders range pinned to >=0.23.0,<0.24.0
-- This resolves the ResolutionImpossible error seen during bootstrap.
+- Resolve FastAPI/Starlette/SSE constraint conflict:
+  - FastAPI 0.115.x requires Starlette >=0.37.2,<0.39.0
+  - Pin Starlette in that range and set sse-starlette==1.8.2 which is compatible
+- Keep previous Solana stack pins intact
