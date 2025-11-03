@@ -11,9 +11,8 @@ class JupiterQuoter:
         self.base = settings.JUP_ORDER_BASE
 
     async def get_quote(self, input_mint: str, output_mint: str, amount: int) -> dict | None:
-        """Get Jupiter Ultra order response with pre-built transaction"""
+        """Get Jupiter Ultra order response with pre-built transaction (mode=build)"""
         if os.getenv("OFFLINE_QUOTES", "false").lower() == "true":
-            # Offline mode - return mock Ultra-style response
             in_amt = amount / 1_000_000
             out_amt = in_amt * 0.995
             return {
@@ -26,58 +25,46 @@ class JupiterQuoter:
                 "outAmount": str(int(out_amt * 1_000_000)),
                 "slippageBps": self.settings.MAX_ROUTE_SLIPPAGE_BPS
             }
-        
+
         params = {
             "inputMint": input_mint,
             "outputMint": output_mint,
             "amount": str(amount),
-            "taker": self.settings.user_pubkey,  # Required for Ultra API
+            "taker": self.settings.user_pubkey,
             "slippageBps": self.settings.MAX_ROUTE_SLIPPAGE_BPS,
+            # Request a built, executable transaction (Ultra)
+            "mode": "build",
+            "swapMode": "ExactIn",
+            "useSharedAccounts": "true",
+            "wrapAndUnwrapSol": "true",
         }
-        
+        # Optional fee knobs
+        if self.settings.PRIORITY_FEE_MICRO_LAMPORTS:
+            params["computeUnitPriceMicroLamports"] = str(self.settings.PRIORITY_FEE_MICRO_LAMPORTS)
+
         headers = {}
         if self.settings.JUP_API_KEY:
             headers["X-API-Key"] = self.settings.JUP_API_KEY
-        
+
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=12) as client:
                 r = await client.get(f"{self.base}/order", params=params, headers=headers)
                 body_txt = None
                 try:
-                    body_txt = r.text[:400]
+                    body_txt = r.text[:600]
                 except Exception:
                     pass
                 logger.info("ultra.order", extra={"status": r.status_code, "body": body_txt})
                 r.raise_for_status()
                 data = r.json()
-                
-            # Validate Ultra response has required fields
-            if "transaction" not in data or "requestId" not in data:
-                logger.warning("order.invalid_response", extra={"keys": list(data.keys())})
+
+            # Ultra must return transaction+requestId in build mode
+            if not (isinstance(data, dict) and data.get("transaction") and data.get("requestId")):
+                logger.warning("order.invalid_or_quote_only", extra={"keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__})
                 return None
-                
+
             return data
-            
+
         except Exception as e:
             logger.error("order.failed", extra={"error": str(e)})
             return None
-
-    async def top_routes(self, base_mint: str, quote_mint: str, amount: int, n: int = 3):
-        """Legacy method for backward compatibility - now returns single Ultra order"""
-        quote = await self.get_quote(base_mint, quote_mint, amount)
-        if not quote:
-            return []
-            
-        in_amt = float(quote.get("inAmount", 0)) / 1_000_000
-        out_amt = float(quote.get("outAmount", 0)) / 1_000_000
-        gross = out_amt - in_amt
-        fees = in_amt * (TAKER_FEE_BPS/10_000)
-        priority = self.settings.PRIORITY_FEE_MICRO_LAMPORTS / 1_000_000_000 * 25
-        expected_pnl_usd = gross - fees - priority
-        
-        return [{
-            "inAmount": quote.get("inAmount"),
-            "outAmount": quote.get("outAmount"), 
-            "expected_pnl_usd": expected_pnl_usd,
-            "quote_response": quote  # Include full Ultra response
-        }]
