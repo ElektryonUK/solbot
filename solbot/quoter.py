@@ -11,7 +11,7 @@ class JupiterQuoter:
         self.base = settings.JUP_ORDER_BASE
 
     async def get_quote(self, input_mint: str, output_mint: str, amount: int) -> dict | None:
-        """Get Jupiter Ultra order response with pre-built transaction (mode=build)"""
+        """Get Jupiter Ultra order response with pre-built transaction (POST /order)"""
         if os.getenv("OFFLINE_QUOTES", "false").lower() == "true":
             in_amt = amount / 1_000_000
             out_amt = in_amt * 0.995
@@ -26,39 +26,37 @@ class JupiterQuoter:
                 "slippageBps": self.settings.MAX_ROUTE_SLIPPAGE_BPS
             }
 
-        params = {
+        body = {
             "inputMint": input_mint,
             "outputMint": output_mint,
             "amount": str(amount),
             "taker": self.settings.user_pubkey,
             "slippageBps": self.settings.MAX_ROUTE_SLIPPAGE_BPS,
-            # Request a built, executable transaction (Ultra)
+            # Explicit build-mode request for executable transaction
             "mode": "build",
             "swapMode": "ExactIn",
-            "useSharedAccounts": "true",
-            "wrapAndUnwrapSol": "true",
+            "useSharedAccounts": True,
+            "wrapAndUnwrapSol": True,
         }
-        # Optional fee knobs
         if self.settings.PRIORITY_FEE_MICRO_LAMPORTS:
-            params["computeUnitPriceMicroLamports"] = str(self.settings.PRIORITY_FEE_MICRO_LAMPORTS)
+            body["computeUnitPriceMicroLamports"] = self.settings.PRIORITY_FEE_MICRO_LAMPORTS
 
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         if self.settings.JUP_API_KEY:
             headers["X-API-Key"] = self.settings.JUP_API_KEY
 
         try:
             async with httpx.AsyncClient(timeout=12) as client:
-                r = await client.get(f"{self.base}/order", params=params, headers=headers)
+                r = await client.post(f"{self.base}/order", json=body, headers=headers)
                 body_txt = None
                 try:
-                    body_txt = r.text[:600]
+                    body_txt = r.text[:800]
                 except Exception:
                     pass
                 logger.info("ultra.order", extra={"status": r.status_code, "body": body_txt})
                 r.raise_for_status()
                 data = r.json()
 
-            # Ultra must return transaction+requestId in build mode
             if not (isinstance(data, dict) and data.get("transaction") and data.get("requestId")):
                 logger.warning("order.invalid_or_quote_only", extra={"keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__})
                 return None
