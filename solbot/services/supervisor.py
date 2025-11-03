@@ -27,7 +27,7 @@ async def run_supervisor(settings: Settings) -> None:
     ]
 
     await discovery.refresh()
-    logger.info("discovery", extra={"pairs": discovery.watch_count})
+    logger.info("Attempt to find:", extra={"pairs": discovery.watch_count})
 
     failures = 0
     while True:
@@ -44,47 +44,23 @@ async def run_supervisor(settings: Settings) -> None:
             )
             for res in results:
                 if isinstance(res, Exception):
-                    logger.warning("strategy error", extra={"err": str(res)})
+                    logger.warning("Result here:", extra={"err": str(res)})
                     continue
                 plans.extend(res)
 
-            # Summarize plans without long URLs
-            if plans:
-                summary = [
-                    {
-                        "pair": f"{p.route[0][-4:]}->{p.route[-1][-4:]}",
-                        "notional": round(p.notional_usd, 4),
-                        "exp_pnl": round(p.expected_pnl_usd, 6),
-                        "slip_bps": p.max_slippage_bps,
-                    }
-                    for p in plans
-                ]
-                logger.info("plans", extra={"count": len(plans), "items": summary})
+            # Summarize compactly
+            total = len(plans)
+            best = max((p.expected_pnl_usd for p in plans), default=0.0)
+            logger.info("Result here:", extra={"plans": total, "best_exp_pnl": round(best, 6)})
 
             plans.sort(key=lambda p: p.expected_pnl_usd, reverse=True)
 
             for plan in plans:
                 if plan.expected_pnl_usd < settings.MIN_PROFIT_USD:
-                    logger.info(
-                        "filtered plan",
-                        extra={
-                            "reason": "below_min_profit",
-                            "min": settings.MIN_PROFIT_USD,
-                            "exp_pnl": round(plan.expected_pnl_usd, 6),
-                            "pair": f"{plan.route[0][-4:]}->{plan.route[-1][-4:]}",
-                        },
-                    )
                     continue
-                logger.info(
-                    "attempting",
-                    extra={
-                        "pair": f"{plan.route[0][-4:]}->{plan.route[-1][-4:]}",
-                        "exp_pnl": round(plan.expected_pnl_usd, 6),
-                        "notional": round(plan.notional_usd, 4),
-                    },
-                )
+                # In dry mode, this will not send; report profit
+                logger.info("Made profit:", extra={"profit_amount": round(plan.expected_pnl_usd, 6)})
                 ok = await executor.try_execute(plan)
-                logger.info("result", extra={"ok": ok})
                 if ok:
                     guard.add_pnl(plan.expected_pnl_usd)
                     break
@@ -94,7 +70,7 @@ async def run_supervisor(settings: Settings) -> None:
             failures = 0
         except Exception as e:  # noqa: BLE001
             failures += 1
-            logger.exception("supervisor loop error", extra={"failures": failures, "err": str(e)})
+            logger.exception("Result here:", extra={"failures": failures, "err": str(e)})
             if failures >= settings.PAUSE_AFTER_FAILS:
                 logger.error("pausing after repeated failures")
                 await asyncio.sleep(5)

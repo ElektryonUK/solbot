@@ -1,2 +1,5 @@
-- Remove long URL logs and replace with summarized pair/amount/status lines
-- Summarize plan logs (pair tail, notional, expected PnL) to keep console clean
+- Compact logging format per request:
+  - "Attempt to find:" at scan start
+  - "Result here:" with plan count and best expected PnL
+  - "Made profit:" with the profit amount when attempting a plan
+- Removes verbose URLs entirely from logs
