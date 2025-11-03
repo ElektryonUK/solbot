@@ -18,12 +18,28 @@ class TwoLegSpread:
         plans: List[Plan] = []
         notional_usd = min(self.s.MAX_NOTIONAL_USD, 50)
         amount = int(notional_usd * 1_000_000)  # assume USDC 6dp
+        
         # scan SOL<>USD pairs as a simple baseline
         for usd_mint in USD_MINTS.values():
-            routes = await self.q.top_routes(usd_mint, SOL_MINT, amount, n=1)
-            if not routes:
+            quote = await self.q.get_quote(usd_mint, SOL_MINT, amount)
+            if not quote:
                 continue
-            r = routes[0]
-            est_pnl = float(r.get("expected_pnl_usd", -0.01))
-            plans.append(Plan(route=[usd_mint, SOL_MINT], notional_usd=notional_usd, expected_pnl_usd=est_pnl, max_slippage_bps=self.s.SLIPPAGE_BPS_PER_LEG*2))
+                
+            # Extract data from quote response
+            in_amt = float(quote.get("inAmount", 0)) / 1_000_000
+            out_amt = float(quote.get("outAmount", 0)) / 1_000_000
+            gross = out_amt - in_amt
+            fees = in_amt * (30/10_000)  # Taker fee
+            priority = self.s.PRIORITY_FEE_MICRO_LAMPORTS / 1_000_000_000 * 25
+            est_pnl = gross - fees - priority
+            
+            plans.append(Plan(
+                input_mint=usd_mint,
+                output_mint=SOL_MINT,
+                input_amount=amount,
+                quote_response=quote,
+                notional_usd=notional_usd,
+                expected_pnl_usd=est_pnl,
+                max_slippage_bps=self.s.SLIPPAGE_BPS_PER_LEG*2
+            ))
         return plans

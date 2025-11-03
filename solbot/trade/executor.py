@@ -6,115 +6,37 @@ from solbot.execution.jupiter_swap import JupiterSwap
 
 if TYPE_CHECKING:
     from solbot.core.rpc import RpcPool
-
-# Wide-net aliases for route items
-ALIASES_IN = [
-    "input_mint", "base", "base_mint", "from_mint", "mint_in", "in_mint",
-    "src_mint", "token_in", "in_token", "in_symbol", "base_token_mint", "base_token"
-]
-ALIASES_OUT = [
-    "output_mint", "quote", "quote_mint", "to_mint", "mint_out", "out_mint",
-    "dst_mint", "token_out", "out_token", "out_symbol", "quote_token_mint", "quote_token"
-]
-ALIASES_AMT = [
-    "input_amount", "amount", "amount_in", "base_amount", "in_amount",
-    "qty_in", "notional_in", "size", "base_size", "amount_base"
-]
+    from solbot.strategy.models import Plan
 
 class Executor:
     def __init__(self, settings, rpc_pool: RpcPool) -> None:
         self.settings = settings
         self.rpc_pool = rpc_pool
         self.jupiter_swap = JupiterSwap()
+        self.jupiter_swap.init_with_settings(settings)
         logger.info("Executor initialized", extra={
             "dry_run": settings.DRY_RUN,
             "paper_trade": settings.PAPER_TRADE,
-            "user_pubkey": getattr(settings, 'USER_PUBKEY', 'NOT_SET')[:8] + "..." if hasattr(settings, 'USER_PUBKEY') else "NOT_SET"
+            "user_pubkey": getattr(settings, 'user_pubkey', 'NOT_SET')[:8] + "..." if hasattr(settings, 'user_pubkey') else "NOT_SET"
         })
 
-    def _get_first(self, obj: dict, keys: list[str]):
-        for k in keys:
-            v = obj.get(k)
-            if v is not None:
-                return v
-        return None
-
-    def _inspect_preview(self, d: dict):
-        try:
-            keys = list(d.keys())[:15]
-            preview = {}
-            for k in keys:
-                v = d.get(k)
-                if isinstance(v, (str, int, float)):
-                    preview[k] = (v[:12] + "...") if isinstance(v, str) and len(v) > 15 else v
-                else:
-                    preview[k] = type(v).__name__
-            return json.dumps({"keys": list(d.keys()), "preview": preview})
-        except Exception:
-            return json.dumps({"repr": repr(d)})
-
-    async def try_execute(self, plan) -> bool:
-        # Plan inspect
-        try:
-            if hasattr(plan, 'model_dump'):
-                plan_repr = plan.model_dump()
-            elif hasattr(plan, 'dict'):
-                plan_repr = plan.dict()
-            elif isinstance(plan, dict):
-                plan_repr = plan
-            else:
-                plan_repr = plan.__dict__
-        except Exception:
-            plan_repr = {"repr": repr(plan)}
-
-        logger.info("plan.inspect: " + self._inspect_preview(plan_repr))
-
-        legs = getattr(plan, "legs", None)
-
-        # New: if no legs, try to derive from first route item
-        route = plan_repr.get("route") if isinstance(plan_repr, dict) else None
-        if legs is None and isinstance(route, list) and route:
-            # Inspect route[0] structure
-            r0 = route[0] if isinstance(route[0], dict) else (
-                getattr(route[0], 'model_dump', lambda: None)() or getattr(route[0], '__dict__', {})
-            )
-            logger.info("route.inspect: " + self._inspect_preview(r0))
-
-            # Wide-net mapping from route[0]
-            input_mint = self._get_first(r0, ALIASES_IN)
-            output_mint = self._get_first(r0, ALIASES_OUT)
-            input_amount = self._get_first(r0, ALIASES_AMT)
-
-            # As a fallback, if amount is missing but there is a notional in plan, try qty_in/size on route
-            if input_amount is None and isinstance(route[0], dict):
-                for k in ("qty_in", "size", "amount_in", "in_amount"):
-                    if k in r0 and isinstance(r0[k], (int, float, str)):
-                        input_amount = r0[k]
-                        break
-
-            candidate = {
-                "input_mint": input_mint,
-                "output_mint": output_mint,
-                "input_amount": input_amount,
-            }
-            logger.info("candidate.inspect: " + json.dumps(candidate))
-
-            if all(candidate.values()):
-                legs = [candidate]
-
-        if legs is None:
-            logger.error("fail.inspect: " + json.dumps({
-                "reason": "No legs and no recognizable fields (plan-level and route[0] mapping failed)",
-                "plan_keys": list(plan_repr.keys()) if isinstance(plan_repr, dict) else type(plan_repr).__name__
-            }))
-            return False
-
+    async def try_execute(self, plan: Plan) -> bool:
         logger.info("execution.start: " + json.dumps({
-            "legs_len": len(legs),
-            "max_slippage_bps": getattr(plan, "max_slippage_bps", None),
+            "input_mint": plan.input_mint[-8:],
+            "output_mint": plan.output_mint[-8:], 
+            "input_amount": plan.input_amount,
+            "expected_pnl": plan.expected_pnl_usd,
             "dry_run": self.settings.DRY_RUN,
             "paper_trade": self.settings.PAPER_TRADE
         }))
+
+        # Validate quote_response has routePlan
+        if "routePlan" not in plan.quote_response or not plan.quote_response["routePlan"]:
+            logger.error("fail.inspect: " + json.dumps({
+                "reason": "Missing or empty routePlan in quote response",
+                "quote_keys": list(plan.quote_response.keys())
+            }))
+            return False
 
         if self.settings.DRY_RUN or self.settings.PAPER_TRADE:
             logger.info("execution.skip: " + json.dumps({
@@ -125,40 +47,26 @@ class Executor:
             return False
 
         try:
-            for i, leg in enumerate(legs):
-                lm_src = leg if isinstance(leg, dict) else (getattr(leg, 'model_dump', lambda: None)() or getattr(leg, '__dict__', {}))
-                lm = {
-                    "input_mint": self._get_first(lm_src, ALIASES_IN) or getattr(leg, "input_mint", None) or getattr(leg, "base", None),
-                    "output_mint": self._get_first(lm_src, ALIASES_OUT) or getattr(leg, "output_mint", None) or getattr(leg, "quote", None),
-                    "input_amount": self._get_first(lm_src, ALIASES_AMT) or getattr(leg, "input_amount", None) or getattr(leg, "amount", None),
-                }
-                logger.info("leg.inspect: " + json.dumps({"idx": i+1, **lm}))
+            swap_result = await self.jupiter_swap.build_swap(
+                quote_response=plan.quote_response,
+                user_pubkey=self.settings.user_pubkey,
+                prioritization_fee_lamports=self.settings.PRIORITY_FEE_MICRO_LAMPORTS * 1000,  # Convert micro to regular lamports
+                compute_unit_price_micro_lamports=self.settings.PRIORITY_FEE_MICRO_LAMPORTS,
+            )
 
-                if not (lm.get("input_mint") and lm.get("output_mint") and lm.get("input_amount")):
-                    logger.error("fail.inspect: " + json.dumps({
-                        "reason": "Missing required fields on leg",
-                        "leg": lm
-                    }))
-                    continue
+            logger.info("execution.success: " + json.dumps({
+                "signed_tx_len": len(swap_result.get("signed_transaction", "")),
+                "last_valid_block": swap_result.get("last_valid_block_height"),
+                "priority_fee": swap_result.get("prioritization_fee_lamports")
+            }))
 
-                swap_result = await self.jupiter_swap.build_swap(
-                    input_mint=lm["input_mint"],
-                    output_mint=lm["output_mint"],
-                    amount=int(lm["input_amount"]),
-                    slippage_bps=int(getattr(plan, "max_slippage_bps", 100)),
-                    user_pubkey=self.settings.USER_PUBKEY,
-                    prioritization_micro_lamports=getattr(self.settings, "PRIORITY_FEE_MICRO_LAMPORTS", None),
-                )
-
-                logger.info("leg.success: " + json.dumps({
-                    "idx": i+1,
-                    "result_keys": list(swap_result.keys()) if isinstance(swap_result, dict) else type(swap_result).__name__
-                }))
-
+            # TODO: Submit signed transaction to network via RPC
+            # For now, just log success
             return True
+            
         except Exception as e:
             logger.error("fail.inspect: " + json.dumps({
-                "reason": "exception",
+                "reason": "exception during swap build",
                 "error_type": type(e).__name__,
                 "error_message": str(e)
             }))
