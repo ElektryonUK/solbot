@@ -11,9 +11,10 @@ class Settings(BaseModel):
     user_pubkey: str = os.getenv("USER_PUBKEY", "")
     environment: str = os.getenv("ENV", "dev")
 
-    # Jupiter API endpoints (public v6)
-    JUP_QUOTE_BASE: str = os.getenv("JUP_QUOTE_BASE", "https://quote-api.jup.ag/v6")
-    JUP_SWAP_BASE: str = os.getenv("JUP_SWAP_BASE", "https://quote-api.jup.ag/v6")
+    # Jupiter Ultra API (authenticated)
+    JUP_API_KEY: str = os.getenv("JUP_API_KEY", "")
+    JUP_ORDER_BASE: str = os.getenv("JUP_ORDER_BASE", "https://api.jup.ag/ultra/v1")
+    JUP_EXECUTE_BASE: str = os.getenv("JUP_EXECUTE_BASE", "https://api.jup.ag/ultra/v1")
 
     # Pools & scanning
     RPC_HTTPS: List[str] = os.getenv("RPC_HTTPS", "").split(",") if os.getenv("RPC_HTTPS") else ["https://api.mainnet-beta.solana.com"]

@@ -17,7 +17,8 @@ class Executor:
         logger.info("Executor initialized", extra={
             "dry_run": settings.DRY_RUN,
             "paper_trade": settings.PAPER_TRADE,
-            "user_pubkey": getattr(settings, 'user_pubkey', 'NOT_SET')[:8] + "..." if hasattr(settings, 'user_pubkey') else "NOT_SET"
+            "user_pubkey": getattr(settings, 'user_pubkey', 'NOT_SET')[:8] + "..." if hasattr(settings, 'user_pubkey') else "NOT_SET",
+            "api_key_set": bool(getattr(settings, 'JUP_API_KEY', ''))
         })
 
     async def try_execute(self, plan: Plan) -> bool:
@@ -30,11 +31,11 @@ class Executor:
             "paper_trade": self.settings.PAPER_TRADE
         }))
 
-        # Validate quote_response has routePlan
-        if "routePlan" not in plan.quote_response or not plan.quote_response["routePlan"]:
+        # Validate Ultra order response has required fields
+        if "transaction" not in plan.quote_response or "requestId" not in plan.quote_response:
             logger.error("fail.inspect: " + json.dumps({
-                "reason": "Missing or empty routePlan in quote response",
-                "quote_keys": list(plan.quote_response.keys())
+                "reason": "Missing transaction or requestId in Ultra order response",
+                "response_keys": list(plan.quote_response.keys())
             }))
             return False
 
@@ -47,26 +48,25 @@ class Executor:
             return False
 
         try:
-            swap_result = await self.jupiter_swap.build_swap(
+            # Ultra API: quote_response contains pre-built transaction
+            execute_result = await self.jupiter_swap.build_swap(
                 quote_response=plan.quote_response,
                 user_pubkey=self.settings.user_pubkey,
-                prioritization_fee_lamports=self.settings.PRIORITY_FEE_MICRO_LAMPORTS * 1000,  # Convert micro to regular lamports
+                prioritization_fee_lamports=self.settings.PRIORITY_FEE_MICRO_LAMPORTS * 1000,
                 compute_unit_price_micro_lamports=self.settings.PRIORITY_FEE_MICRO_LAMPORTS,
             )
 
             logger.info("execution.success: " + json.dumps({
-                "signed_tx_len": len(swap_result.get("signed_transaction", "")),
-                "last_valid_block": swap_result.get("last_valid_block_height"),
-                "priority_fee": swap_result.get("prioritization_fee_lamports")
+                "status": execute_result.get("status"),
+                "signature": execute_result.get("signature", "")[:16] + "..." if execute_result.get("signature") else "none",
+                "request_id": plan.quote_response.get("requestId")
             }))
 
-            # TODO: Submit signed transaction to network via RPC
-            # For now, just log success
             return True
             
         except Exception as e:
             logger.error("fail.inspect: " + json.dumps({
-                "reason": "exception during swap build",
+                "reason": "exception during Ultra execution",
                 "error_type": type(e).__name__,
                 "error_message": str(e)
             }))
