@@ -1,12 +1,15 @@
 from __future__ import annotations
+import os
 import httpx
 from typing import Any
 
 class JupiterSwap:
-    base = "https://quote-api.jup.ag/v6"
+    def __init__(self):
+        # Use same base as quoter for consistency
+        self.base = os.getenv("JUP_BASE", "https://lite-api.jup.ag/swap/v1")
 
-    @staticmethod
     async def build_swap(
+        self,
         input_mint: str,
         output_mint: str,
         amount: int,
@@ -16,16 +19,21 @@ class JupiterSwap:
         dynamic_slippage: bool = False,
         prioritization_micro_lamports: int | None = None,
     ) -> dict[str, Any]:
+        # New V1 API payload structure
         payload = {
-            "quoteResponse": None,  # can be set when we pass pre-fetched quote
+            "inputMint": input_mint,
+            "outputMint": output_mint, 
+            "amount": str(amount),
+            "slippageBps": slippage_bps,
             "userPublicKey": user_pubkey,
             "wrapAndUnwrapSol": wrap_and_unwrap_sol,
-            "slippageBps": slippage_bps,
-            "dynamicSlippage": dynamic_slippage,
+            "dynamicComputeUnitLimit": True,
+            "priorityLevelWithMaxLamports": {
+                "priorityLevel": "medium",
+                "maxLamports": prioritization_micro_lamports or 0,
+            }
         }
-        if prioritization_micro_lamports is not None:
-            payload["prioritizationFeeLamports"] = prioritization_micro_lamports
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(f"{JupiterSwap.base}/swap", json=payload)
+            r = await client.post(f"{self.base}/swap", json=payload)
             r.raise_for_status()
             return r.json()

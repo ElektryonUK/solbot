@@ -1,5 +1,5 @@
-- Compact logging format per request:
-  - "Attempt to find:" at scan start
-  - "Result here:" with plan count and best expected PnL
-  - "Made profit:" with the profit amount when attempting a plan
-- Removes verbose URLs entirely from logs
+- **BREAKING**: Migrate all Jupiter API usage from deprecated V6 to V1 endpoints
+  - JupiterSwap now uses JUP_BASE (default: lite-api.jup.ag/swap/v1) instead of quote-api.jup.ag/v6
+  - Discovery uses cache.jup.ag/tokens and token.jup.ag/strict with fallback
+  - Update payload structure for new swap API format
+  - Add fallback token sources with graceful degradation to offline pairs
