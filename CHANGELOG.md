@@ -1,0 +1,8 @@
+- Added extended settings parsed from environment (.env.example updated):
+  - RPC_HTTPS, SCAN_INTERVAL_MS, PAUSE_AFTER_FAILS
+  - MIN_PROFIT_USD, MAX_NOTIONAL_USD, MAX_DAILY_LOSS_USD
+  - SLIPPAGE_BPS_PER_LEG, MAX_ROUTE_SLIPPAGE_BPS
+  - TARGET_CU, PRIORITY_FEE_MICRO_LAMPORTS
+  - DRY_RUN, PAPER_TRADE
+  - JITO_BLOCK_ENGINE_URL, JITO_AUTH
+- These are used by supervisor, quoting, and (soon) executor.
