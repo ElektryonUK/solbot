@@ -1,2 +1,1 @@
-- Switch to new Jupiter quote endpoint (JUP_BASE; default to lite-api)
-- Add OFFLINE_QUOTES to enable fully offline dry-run when network is blocked
+- Add plan summary and filtering/execution logs to supervisor for visibility into profitability decisions

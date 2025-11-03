@@ -48,14 +48,40 @@ async def run_supervisor(settings: Settings) -> None:
                     continue
                 plans.extend(res)
 
+            # Log plan summaries for visibility
+            if plans:
+                summary = [
+                    {
+                        "route": p.route,
+                        "notional_usd": round(p.notional_usd, 4),
+                        "exp_pnl": round(p.expected_pnl_usd, 6),
+                        "slip_bps": p.max_slippage_bps,
+                    }
+                    for p in plans
+                ]
+                logger.info("plans", extra={"count": len(plans), "items": summary})
+
             plans.sort(key=lambda p: p.expected_pnl_usd, reverse=True)
 
+            executed = False
             for plan in plans:
                 if plan.expected_pnl_usd < settings.MIN_PROFIT_USD:
+                    logger.info(
+                        "filtered plan",
+                        extra={
+                            "reason": "below_min_profit",
+                            "min": settings.MIN_PROFIT_USD,
+                            "exp_pnl": round(plan.expected_pnl_usd, 6),
+                            "route": plan.route,
+                        },
+                    )
                     continue
+                logger.info("attempting plan", extra={"route": plan.route, "exp_pnl": round(plan.expected_pnl_usd, 6)})
                 ok = await executor.try_execute(plan)
+                logger.info("execution result", extra={"ok": ok})
                 if ok:
                     guard.add_pnl(plan.expected_pnl_usd)
+                    executed = True
                     break
 
             dt = (time.perf_counter() - t0) * 1000
