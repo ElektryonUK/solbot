@@ -1,0 +1,12 @@
+{
+  "name": "solbot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "python -m solbot",
+    "lint": "ruff check .",
+    "format": "ruff format .",
+    "typecheck": "pyright",
+    "test": "pytest -q"
+  }
+}

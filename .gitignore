@@ -1,0 +1,21 @@
+# flyctl, docker, venv, cache
+__pycache__/
+*.pyc
+.env
+.env.*
+.venv/
+venv/
+.DS_Store
+.idea/
+.vscode/
+pytest_cache/
+site/
+htmlcov/
+.coverage*
+.next/
+node_modules/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

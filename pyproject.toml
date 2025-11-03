@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "B", "UP", "SIM", "ERA"]
+
+[tool.pyright]
+include = ["solbot"]
+pythonVersion = "3.11"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-q"
+pythonpath = ["."]
