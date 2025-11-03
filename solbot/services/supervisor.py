@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+from __future__ import annotations
 import asyncio
 import time
 from typing import Sequence
@@ -11,6 +11,7 @@ from solbot.strategy.models import Plan
 from solbot.strategy.two_leg_spread import TwoLegSpread
 from solbot.strategy.stable_delta import StableDelta
 from solbot.trade.executor import Executor
+from solbot.risk.daily_guard import DailyLossGuard
 
 
 async def run_supervisor(settings: Settings) -> None:
@@ -18,6 +19,7 @@ async def run_supervisor(settings: Settings) -> None:
     discovery = DiscoveryService(settings, rpc_pool)
     quoter = JupiterQuoter(settings)
     executor = Executor(settings, rpc_pool)
+    guard = DailyLossGuard(settings.MAX_DAILY_LOSS_USD)
 
     strategies = [
         TwoLegSpread(settings, discovery, quoter),
@@ -30,9 +32,13 @@ async def run_supervisor(settings: Settings) -> None:
     failures = 0
     while True:
         try:
+            if guard.exceeded():
+                logger.error("Daily loss limit exceeded — pausing execution")
+                await asyncio.sleep(60)
+                continue
+
             t0 = time.perf_counter()
             plans: list[Plan] = []
-            # Run strategies concurrently
             results = await asyncio.gather(
                 *[s.propose_plans() for s in strategies], return_exceptions=True
             )
@@ -42,15 +48,14 @@ async def run_supervisor(settings: Settings) -> None:
                     continue
                 plans.extend(res)
 
-            # Sort best-first by expected pnl
             plans.sort(key=lambda p: p.expected_pnl_usd, reverse=True)
 
-            # Execute first viable plan
             for plan in plans:
                 if plan.expected_pnl_usd < settings.MIN_PROFIT_USD:
                     continue
                 ok = await executor.try_execute(plan)
                 if ok:
+                    guard.add_pnl(plan.expected_pnl_usd)
                     break
 
             dt = (time.perf_counter() - t0) * 1000

@@ -1,4 +1,4 @@
-from __future__ annotations
+from __future__ import annotations
 from typing import List
 from solbot.core.env import Settings
 from solbot.discovery import DiscoveryService
@@ -12,6 +12,5 @@ class StableDelta:
         self.q = quoter
 
     async def propose_plans(self) -> List[Plan]:
-        plans: List[Plan] = []
-        # Simple seed: no-op for now. Next push will use quote API to compute spreads.
-        return plans
+        # placeholder: no stable pool modeling yet
+        return []

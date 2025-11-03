@@ -1,6 +1,3 @@
-- Implemented live execution path in Executor:
-  - Jupiter swap transaction build
-  - Compute budget instructions injection
-  - Signing with USER_KEYPAIR
-  - Send via Jito bundle (if configured) or standard RPC
-- Strategy stubs remain; next update will compute real spreads and expected PnL.
+- Add TwoLegSpread baseline using Jupiter quotes for USDx<>SOL seed universe
+- Add DailyLossGuard and wire to supervisor; accumulates realized PnL placeholder
+- Keep StableDelta as placeholder for now
