@@ -6,6 +6,10 @@ from solbot.execution.jupiter_swap import JupiterSwap
 if TYPE_CHECKING:
     from solbot.core.rpc import RpcPool
 
+ALIASES_IN = ["input_mint", "base", "base_mint", "from_mint", "mint_in", "in_mint"]
+ALIASES_OUT = ["output_mint", "quote", "quote_mint", "to_mint", "mint_out", "out_mint"]
+ALIASES_AMT = ["input_amount", "amount", "amount_in", "base_amount", "in_amount"]
+
 class Executor:
     def __init__(self, settings, rpc_pool: RpcPool) -> None:
         self.settings = settings
@@ -16,6 +20,13 @@ class Executor:
             "paper_trade": settings.PAPER_TRADE,
             "user_pubkey": getattr(settings, 'USER_PUBKEY', 'NOT_SET')[:8] + "..." if hasattr(settings, 'USER_PUBKEY') else "NOT_SET"
         })
+
+    def _get_first(self, obj: dict, keys: list[str]):
+        for k in keys:
+            v = obj.get(k)
+            if v is not None:
+                return v
+        return None
 
     async def try_execute(self, plan) -> bool:
         # Log raw plan structure for debugging
@@ -36,11 +47,10 @@ class Executor:
         # Defensive structure discovery
         legs = getattr(plan, "legs", None)
         if legs is None and isinstance(plan_repr, dict):
-            # Attempt build from dict-like plan
             candidate = {
-                "input_mint": plan_repr.get("input_mint") or plan_repr.get("base"),
-                "output_mint": plan_repr.get("output_mint") or plan_repr.get("quote"),
-                "input_amount": plan_repr.get("amount") or plan_repr.get("input_amount"),
+                "input_mint": self._get_first(plan_repr, ALIASES_IN),
+                "output_mint": self._get_first(plan_repr, ALIASES_OUT),
+                "input_amount": self._get_first(plan_repr, ALIASES_AMT),
             }
             logger.info("plan.single_candidate", extra=candidate)
             if all(candidate.values()):
@@ -71,10 +81,16 @@ class Executor:
         try:
             for i, leg in enumerate(legs):
                 # Support dict or object
-                lm = leg if isinstance(leg, dict) else {
-                    "input_mint": getattr(leg, "input_mint", None) or getattr(leg, "base", None),
-                    "output_mint": getattr(leg, "output_mint", None) or getattr(leg, "quote", None),
-                    "input_amount": getattr(leg, "input_amount", None) or getattr(leg, "amount", None),
+                if isinstance(leg, dict):
+                    lm_src = leg
+                else:
+                    # build dict from object
+                    lm_src = getattr(leg, 'model_dump', lambda: None)() or getattr(leg, '__dict__', {})
+
+                lm = {
+                    "input_mint": self._get_first(lm_src, ALIASES_IN) or getattr(leg, "input_mint", None) or getattr(leg, "base", None),
+                    "output_mint": self._get_first(lm_src, ALIASES_OUT) or getattr(leg, "output_mint", None) or getattr(leg, "quote", None),
+                    "input_amount": self._get_first(lm_src, ALIASES_AMT) or getattr(leg, "input_amount", None) or getattr(leg, "amount", None),
                 }
                 logger.info("leg.mapped", extra={"idx": i+1, "len": len(legs), **lm})
 
