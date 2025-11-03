@@ -1,3 +1,5 @@
-- Add expected PnL annotation in quoter for dry-run gating
-- Implement dry_run.sh script and DRY_RUN guide
-- Update TwoLegSpread to use annotated expected_pnl_usd
+- Align deps for Python 3.12 on Ubuntu 24.04:
+  - solana==0.36.0 (requires solders >=0.23.0,<0.24.0)
+  - anchorpy==0.20.2 (relaxes solders constraint per upstream changelog)
+  - solders range pinned to >=0.23.0,<0.24.0
+- This resolves the ResolutionImpossible error seen during bootstrap.
